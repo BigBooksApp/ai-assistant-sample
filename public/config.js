@@ -14,7 +14,7 @@
 //
 // There is no model API key here either, and there is nowhere to put one. BigBooks
 // calls the model provider with the key stored on the party that owns this OAuth
-// client — add yours at https://www.bigbooks.app/secrets. See the README.
+// client — add yours at https://www.bigbooks.app/ai-secrets. See the README.
 
 export const CONFIG = {
   CLIENT_ID: '',                                  // <-- your public client_id
@@ -27,7 +27,7 @@ export const CONFIG = {
   USERINFO_URL: 'https://www.bigbooks.app/oauth2/userInfo',
 
   // Where you manage the BYOK model provider keys this app spends.
-  SECRETS_URL: 'https://www.bigbooks.app/secrets',
+  SECRETS_URL: 'https://www.bigbooks.app/ai-secrets',
 
   // openid is required to receive the `bigbooks:party` userInfo claim.
   SCOPES: 'openid profile email',
