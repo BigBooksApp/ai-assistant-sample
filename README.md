@@ -6,6 +6,10 @@ books. **Fully static**: no backend, no build step, no dependencies, just HTML, 
 JS. Authentication is **OAuth 2.0 Authorization Code + PKCE** entirely in the browser, so there
 is no client secret to protect and nothing runs server-side.
 
+![A conversation: history in the left column, the model's thinking expanded, and a markdown answer with a table](docs/conversation.png)
+
+<sup>Screenshots from `#demo` mode — synthetic data and canned answers, no account or model key needed.</sup>
+
 It shows:
 
 - **Streamed answers** over server-sent events, rendered as markdown — tables, lists, code, and
@@ -19,6 +23,8 @@ It shows:
 - **Plaid account linking**, because the assistant answers from your data and there is nothing to
   answer from until something is linked
 - **Stop**, which ends an in-flight turn server-side and keeps the partial answer
+
+![The empty state, offering five suggested questions sampled from a larger pool](docs/empty-state.png)
 
 ## Bring your own model key
 
@@ -191,6 +197,7 @@ public/
   prompts.js    # the suggested-question pool the empty state samples
   demo.js       # #demo mode: synthetic conversations and a replayed stream
 openapi.json    # the BigBooks API spec, for reference
+docs/           # the README screenshots
 .claude/
   launch.json   # convenience config to serve public/ on :5173
 ```
