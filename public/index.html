@@ -44,7 +44,13 @@
       New chat
     </button>
 
-    <div class="history-head">Conversations</div>
+    <div class="search">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+      <input id="search" type="search" placeholder="Search conversations" autocomplete="off"
+             spellcheck="false" aria-label="Search conversations" aria-controls="history">
+    </div>
+
+    <div id="history-head" class="history-head">Conversations</div>
     <nav id="history" class="history" aria-label="Conversation history">
       <p class="history-empty muted">No conversations yet.</p>
     </nav>
