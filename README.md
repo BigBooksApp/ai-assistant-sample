@@ -74,9 +74,12 @@ Both streaming endpoints emit the same four event types:
 | `thinking` | raw text chunk | The model's reasoning. Concatenate in arrival order. |
 | *(unnamed)* | raw text chunk | A chunk of the answer. Concatenate in arrival order. |
 | `done` | `{"id":…}` | Terminal success. |
-| `error` | `{"code":…,"message":…}` | Terminal failure, reported **inside** the stream. |
+| `error` | `{"code":…,"message":…}` | Terminal failure raised *after* the stream opened. Failures the server can detect before that are HTTP statuses instead — see below. |
 
 Lines beginning `:` are keep-alive comments sent every few seconds; ignore them.
+
+Every `data:` line carries a one-space pad. A spec-compliant parser strips one leading space
+per line and the chunks then concatenate into the exact answer text; do not trim them further.
 
 ## Things worth knowing before you copy this code
 
@@ -85,14 +88,20 @@ These are real behaviours of the API and of SSE that shaped the app.
 - **`EventSource` cannot be used here.** It cannot set an `Authorization` header and cannot issue
   a `POST` or `PUT`, and both conversation streams are authenticated non-GET requests. The client
   reads the response body itself; [`public/sse.js`](public/sse.js) is the whole of the framing.
-- **Do not strip the leading space from a `data:` line.** The SSE spec says a client removes one
-  space after the colon, and `EventSource` does. But the server writes the payload as a bare
-  `data:` + value, so for an answer chunk that begins with a space (`" $842.17"`) that space *is*
-  the payload — strip it and the words run together. This client deliberately does not strip it.
-  Named events all carry JSON, where it makes no difference either way.
-- **A stale `If-Match` arrives as an `error` event, not an HTTP 409.** By the time the use case
-  runs, the response has already committed to `200 text/event-stream`. Handle `code: "conflict"`
-  in the stream, re-read the conversation for its version, and replay the turn.
+- **Strip exactly one leading space per `data:` line, and nothing more.** The SSE spec makes that
+  space a field delimiter rather than payload, and the server pads every line so a compliant parse
+  round-trips the value: an answer chunk that genuinely starts with a space (`" $842.17"`) goes on
+  the wire as `data:  $842.17` and keeps its own space. Skipping the strip does not preserve text,
+  it prefixes every chunk with a stray space. Trimming further is worse still — a chunk can be
+  nothing but whitespace, and that whitespace is a real word boundary.
+- **Failures arrive two ways, and which one depends on timing.** Anything the server can check
+  before the stream opens is a normal HTTP status with a `{ code, errors }` body: **409** for a
+  stale `If-Match`, **404** for an unknown conversation, **400** for a rejected body, **429** for
+  fair use. Once the response has committed to `200 text/event-stream` no status can change, so
+  failures after that point arrive as an in-stream `error` event. Handle both; this client parses
+  them into the same shape and renders them identically.
+- **A 409 means nothing was written.** Someone else advanced the conversation, so re-`GET` it for
+  the current version and replay the turn once. A second conflict is a real problem, not a race.
 - **The version you need for the next turn is not on the stream.** `conversation` carries the
   version at the *start* of the turn; the turn then increments it. Re-`GET` the conversation after
   `done` — which is also where the server's generated **title** and the persisted `thinking` come
@@ -111,8 +120,8 @@ These are real behaviours of the API and of SSE that shaped the app.
 - **Model output is untrusted input.** [`public/markdown.js`](public/markdown.js) escapes every
   character *before* generating any markup, and only `http(s):` and `mailto:` survive as link
   targets. If you swap in a markdown library, keep that ordering.
-- **There is a fair-use gate.** Too many messages in a trailing hour returns
-  `code: "too_many_requests"` with a human-readable message; show it rather than retrying.
+- **There is a fair-use gate.** Too many messages in a trailing hour returns **429** with
+  `code: "too_many_requests"` and a human-readable message; show it rather than retrying.
 
 ### `BASIC` vs `AGENTIC`
 

@@ -277,8 +277,6 @@ async function send(text) {
  * but the same event stream, so only the request differs.
  */
 async function streamTurn(prompt, turn, allowRetry) {
-  let conflicted = false;
-
   const onEvent = ({ event, data }) => {
     switch (event) {
       case 'conversation': {
@@ -300,11 +298,11 @@ async function streamTurn(prompt, turn, allowRetry) {
       case 'done':
         break;
       case 'error': {
+        // Only failures raised *after* the stream opened land here — by then the response
+        // has committed to 200 text/event-stream and no status can change. Everything the
+        // server can check up front (version, ownership, fair use) is an HTTP status
+        // instead, handled below.
         const err = eventJson(data);
-        // A stale If-Match is reported inside the stream, not as an HTTP 409, because the
-        // response has already committed to 200 text/event-stream by the time the use case
-        // runs. Re-read the version and replay the turn once.
-        if (err.code === 'conflict' && allowRetry) { conflicted = true; break; }
         turn.error = friendlyError(err.code, err.message);
         break;
       }
@@ -342,21 +340,41 @@ async function streamTurn(prompt, turn, allowRetry) {
   });
 
   if (res.status === 401) { clearToken(); throw new AuthExpired('Session expired'); }
-  if (!res.ok) throw new Error(describeError(res.status, 'the conversation stream', await res.text()));
 
-  await readEvents(res, onEvent);
-
-  if (conflicted) {
-    // Someone else advanced this conversation (another tab, another device). Take the
-    // fresh version and replay this turn once; a second conflict is a real problem, not
-    // a race. Only the version is adopted — re-reading the messages here would swap out
-    // the `turn` object the caller is still painting into.
+  if (res.status === 409 && allowRetry) {
+    // Someone else advanced this conversation (another tab, another device), so our
+    // If-Match was stale and nothing was written. Take the fresh version and replay this
+    // turn once; a second conflict is a real problem, not a race. Only the version is
+    // adopted — re-reading the messages here would swap out the `turn` object the caller
+    // is still painting into.
     const convo = await apiGet(conversationPath(state.current.id), { party: state.party });
     state.current.version = convo.version;
     turn.text = '';
     turn.thinking = '';
     return streamTurn(prompt, turn, false);
   }
+
+  if (!res.ok) {
+    // A pre-stream refusal: 409 stale If-Match, 404 unknown conversation, 400 rejected
+    // body, 429 fair use. The body is the same { code, errors } shape the rest of the API
+    // returns, so it reads through the same translator as an in-stream error event.
+    const failure = failureFromBody(res.status, await res.text());
+    turn.error = friendlyError(failure.code, failure.message);
+    return;
+  }
+
+  await readEvents(res, onEvent);
+}
+
+/** Reads BigBooks' { code, errors } error body into the { code, message } shape of an error event. */
+function failureFromBody(status, text) {
+  try {
+    const body = JSON.parse(text);
+    if (body && (body.code || Array.isArray(body.errors))) {
+      return { code: body.code || null, message: (body.errors || []).join('; ') || null };
+    }
+  } catch { /* not JSON — fall through to the status */ }
+  return { code: null, message: 'The assistant could not answer (HTTP ' + status + ').' };
 }
 
 /** Re-reads the current conversation, waiting out a turn that has not finished persisting. */
@@ -389,9 +407,10 @@ async function stopTurn() {
   if (state.abort) state.abort.abort();
 }
 
-// Most in-stream errors already carry a message meant for a person — the fair-use 429 and
-// the entitlement 402 both do — so they pass through. The one worth translating is the
-// missing-key case, which surfaces as an internal error whose text explains nothing.
+// Failures reach us two ways — an HTTP status before the stream opens, an `error` event
+// after — and both parse to the same { code, message }. Most already carry a message meant
+// for a person (fair use, entitlement) so they pass straight through. The one worth
+// translating is the missing-key case, an internal error whose text explains nothing.
 function friendlyError(code, message) {
   const text = message || 'The assistant could not answer.';
   return /No AI properties/i.test(text)

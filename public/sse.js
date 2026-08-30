@@ -40,15 +40,17 @@ export async function readEvents(response, onEvent) {
 
       const colon = line.indexOf(':');
       const field = colon < 0 ? line : line.slice(0, colon);
-      // NOTE: the spec says strip one leading space after the colon, and that is what
-      // EventSource does. We deliberately do not. Spring writes the payload as bare
-      // `data:` + value, so for an answer-token chunk that begins with a space (" $842.17")
-      // the space *is* the payload, and stripping it runs the words together. Named events
-      // here all carry JSON, where a leading space would not survive to matter either way.
-      const value_ = colon < 0 ? '' : line.slice(colon + 1);
+      // One leading space after the colon is delimiter, not payload: the spec has every
+      // client drop it, and EventSource does. The server pads each data line with exactly
+      // one space so that a compliant parse round-trips the value, which means an answer
+      // chunk that genuinely begins with a space (" $842.17") arrives as "  $842.17" and
+      // keeps its own. Skipping this strip does not preserve text, it adds a space to
+      // every chunk. Do not trim the value further either — a chunk can be pure whitespace.
+      const raw = colon < 0 ? '' : line.slice(colon + 1);
+      const value = raw.startsWith(' ') ? raw.slice(1) : raw;
 
-      if (field === 'event') name = value_;
-      else if (field === 'data') data.push(value_);
+      if (field === 'event') name = value;
+      else if (field === 'data') data.push(value);
       // `id` and `retry` are meaningless for a one-shot stream that is never resumed.
     }
 
