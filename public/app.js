@@ -2,7 +2,7 @@ import { CONFIG } from './config.js';
 import { samplePrompts } from './prompts.js';
 import { renderMarkdown, escapeHtml } from './markdown.js';
 import { readEvents, eventJson } from './sse.js';
-import { DEMO_CONVERSATIONS, demoConversation, demoStream } from './demo.js';
+import { demoConversation, demoSearch, demoStream } from './demo.js';
 
 // ---------------------------------------------------------------- helpers
 const $ = (sel) => document.querySelector(sel);
@@ -187,6 +187,7 @@ const state = {
   party: null,
   who: '',
   conversations: [],
+  search: '',         // the phrase currently filtering the sidebar ('' = show everything)
   current: null,      // { id, version, name }
   messages: [],       // { role, text, thinking, error }
   streaming: false,
@@ -197,14 +198,41 @@ const state = {
 // ---------------------------------------------------------- conversations
 const conversationPath = (id) => '/v1/ai/conversations/' + encodeURIComponent(id);
 
+// Searches run on the server, which matches the phrase against each conversation's name
+// *and* its user/assistant messages, case-insensitively. Wildcards are escaped server-side,
+// so the raw text goes on the wire untouched.
+let searchSeq = 0;
+
 async function loadConversations() {
-  if (state.demo) { state.conversations = DEMO_CONVERSATIONS; return renderHistory(); }
-  const data = await apiGet('/v1/ai/conversations', {
-    party: state.party,
-    query: { page_size: 50, page_number: 0 },
-  });
-  state.conversations = data.conversations || [];
+  // Typing fires several of these; responses can land out of order, and the last one to
+  // arrive is not necessarily the one for the phrase now in the box. Stamp and discard.
+  const seq = ++searchSeq;
+  const phrase = state.search;
+
+  const conversations = state.demo
+    ? demoSearch(phrase)
+    : (await apiGet('/v1/ai/conversations', {
+        party: state.party,
+        query: { page_size: 50, page_number: 0, phrase },
+      })).conversations || [];
+
+  if (seq !== searchSeq) return; // a newer search already went out
+  state.conversations = conversations;
   renderHistory();
+}
+
+let searchTimer;
+function onSearchInput(value) {
+  state.search = value.trim();
+  clearTimeout(searchTimer);
+  // Long enough that a typed word is one request, short enough to feel live.
+  searchTimer = setTimeout(() => loadConversations().catch(reportError), 250);
+}
+
+function clearSearch() {
+  if (!state.search && !$('#search').value) return;
+  $('#search').value = '';
+  onSearchInput('');
 }
 
 async function openConversation(id) {
@@ -421,20 +449,50 @@ function friendlyError(code, message) {
 // ------------------------------------------------------------- rendering
 function renderHistory() {
   const nav = $('#history');
+  const phrase = state.search;
+
+  $('#history-head').textContent = !phrase
+    ? 'Conversations'
+    : state.conversations.length + (state.conversations.length === 1 ? ' match' : ' matches');
+
   if (!state.conversations.length) {
-    nav.innerHTML = '<p class="history-empty muted">No conversations yet.</p>';
+    nav.innerHTML = '<p class="history-empty muted">'
+      + (phrase ? 'Nothing matches &ldquo;' + escapeHtml(phrase) + '&rdquo;.' : 'No conversations yet.')
+      + '</p>';
     return;
   }
+
   const currentId = (state.current || {}).id;
   nav.innerHTML = state.conversations.map((c) => {
+    const name = c.name || 'Untitled';
     const when = relative(c.updatedDate || c.createdDate);
     return '<button class="convo" data-id="' + escapeHtml(c.id) + '"'
       + (c.id === currentId ? ' aria-current="true"' : '')
-      + ' title="' + escapeHtml(c.name || '') + '">'
-      + escapeHtml(c.name || 'Untitled')
+      + ' title="' + escapeHtml(name) + '">'
+      + highlight(name, phrase)
+      // The server matches message text too, so a row can be a hit with nothing visibly
+      // marked. Saying where it matched beats leaving the user to wonder.
+      + (phrase && !containsPhrase(name, phrase) ? '<span class="in-dialog">matched in the conversation</span>' : '')
       + (when ? '<time>' + escapeHtml(when) + '</time>' : '')
       + '</button>';
   }).join('');
+}
+
+const containsPhrase = (text, phrase) => text.toLowerCase().includes(phrase.toLowerCase());
+
+/** Escapes `text`, then wraps each case-insensitive occurrence of `phrase` in a <mark>. */
+function highlight(text, phrase) {
+  if (!phrase) return escapeHtml(text);
+  const lower = text.toLowerCase();
+  const needle = phrase.toLowerCase();
+  const out = [];
+  let at = 0;
+  for (let i = lower.indexOf(needle); i >= 0; i = lower.indexOf(needle, at)) {
+    out.push(escapeHtml(text.slice(at, i)), '<mark>', escapeHtml(text.slice(i, i + needle.length)), '</mark>');
+    at = i + needle.length;
+  }
+  out.push(escapeHtml(text.slice(at)));
+  return out.join('');
 }
 
 function renderMessages() {
@@ -657,6 +715,11 @@ function wire() {
 
   $('#agentic').addEventListener('change', (e) => {
     state.chatType = e.target.checked ? 'AGENTIC' : 'BASIC';
+  });
+
+  $('#search').addEventListener('input', (e) => onSearchInput(e.target.value));
+  $('#search').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { clearSearch(); e.target.blur(); }
   });
 
   $('#history').addEventListener('click', (e) => {

@@ -18,6 +18,9 @@ It shows:
   the answer arrives, and preserved when you reload the conversation later
 - **Conversation history** in a scrollable column on the left; click any conversation to reload
   its whole transcript, or **New chat** to start over
+- **Search over that history**, server-side and across the message text, not just the titles —
+  so "groceries" finds the conversation where you asked about groceries even if its title
+  never says so
 - **An empty state that suggests five questions**, sampled from a larger pool, so the first turn
   is one click rather than a blank page
 - **Plaid account linking**, because the assistant answers from your data and there is nothing to
@@ -25,6 +28,12 @@ It shows:
 - **Stop**, which ends an in-flight turn server-side and keeps the partial answer
 
 ![The empty state, offering five suggested questions sampled from a larger pool](docs/empty-state.png)
+
+Search runs on the server and covers the message text, so a conversation whose title never
+mentions the word still turns up. Those rows say so, rather than leaving you to wonder why
+they matched:
+
+![Searching "budget": three matches, two of them labelled "matched in the conversation", with the open answer containing the word](docs/search.png)
 
 ## Bring your own model key
 
@@ -112,6 +121,12 @@ These are real behaviours of the API and of SSE that shaped the app.
 - **The conversation list omits messages by default.** `GET /v1/ai/conversations` returns metadata
   only unless you pass `include=conversation_messages`. The sidebar does not need them, so it does
   not ask — one `GET` per opened conversation is cheaper than a transcript per row.
+- **`phrase` searches the dialog, not just the title.** It matches the conversation name *or* the
+  text of any `USER`/`ASSISTANT` message, case-insensitively; `SYSTEM` and tool payloads are
+  excluded. Wildcards are escaped server-side, so send the raw text. Two consequences for the UI:
+  a row can be a hit with nothing highlighted in its title — this client says "matched in the
+  conversation" rather than leaving you to wonder — and results still paginate, so a filtered list
+  is one page of matches, not all of them. A blank phrase is treated as no filter at all.
 - **Assistant text and thinking are separate fields.** Stored assistant rows are enveloped (tool
   calls, reasoning); `GET` unwraps them into `text` and `thinking` for you, so a reloaded
   conversation renders exactly like a freshly streamed one.
@@ -217,6 +232,7 @@ docs/           # the README screenshots
 | --- | --- |
 | Your party id | `GET /oauth2/userInfo` → `bigbooks:party` |
 | Conversation history | `GET /v1/ai/conversations?page_size=…&page_number=…` |
+| Search that history | the same call, plus `&phrase=…` |
 | One conversation's transcript | `GET /v1/ai/conversations/{uuid}` |
 | First turn, streamed | `POST /v1/ai/conversations/start/stream` |
 | Later turns, streamed | `PUT /v1/ai/conversations/{uuid}/stream` (takes `If-Match`) |

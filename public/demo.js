@@ -80,6 +80,20 @@ Everything else has room: Dining out 48%, Transport 55%, Household 61%. Nothing 
   ],
 };
 
+/**
+ * Mirrors what the server's `phrase` filter does: a case-insensitive substring match against
+ * the conversation name *and* its user/assistant message text. Searching the dialog rather
+ * than only the titles is the whole point of the parameter, so demo mode does it too.
+ */
+export function demoSearch(phrase) {
+  if (!phrase) return DEMO_CONVERSATIONS;
+  const needle = phrase.toLowerCase();
+  return DEMO_CONVERSATIONS.filter((c) => {
+    const dialog = (DEMO_MESSAGES[c.id] || []).map((m) => m.text).join('\n');
+    return (c.name + '\n' + dialog).toLowerCase().includes(needle);
+  });
+}
+
 function daysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);

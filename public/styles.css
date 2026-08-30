@@ -161,12 +161,38 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 }
 .new-chat:hover { border-color: var(--accent); color: var(--accent); }
 
+.search { position: relative; display: flex; align-items: center; }
+.search svg {
+  position: absolute; left: 10px; font-size: 13px;
+  color: var(--ink-3); pointer-events: none;
+}
+.search input {
+  width: 100%; font: inherit; font-size: 13.5px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 7px 10px 7px 30px;
+  -webkit-appearance: none; appearance: none;
+}
+.search input::placeholder { color: var(--ink-3); }
+.search input:focus { outline: 0; border-color: var(--accent); }
+/* Keep the WebKit clear button — it is the fastest way out of a filter. */
+.search input::-webkit-search-cancel-button { -webkit-appearance: searchfield-cancel-button; cursor: pointer; }
+
 .history-head {
   font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
   color: var(--ink-3); padding: 6px 6px 0;
 }
 .history { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
 .history-empty { font-size: 13px; padding: 6px; margin: 0; }
+/* A hit can be on message text the row does not show, so say where it matched. */
+/* Colour and weight, not just a tint: --accent-soft sits too close to the sidebar in
+   light mode to read as a highlight on its own. */
+.convo mark {
+  background: var(--accent-soft); color: var(--accent); font-weight: 650;
+  border-radius: 3px; padding: 0 1px;
+}
+.convo[aria-current="true"] mark { background: transparent; text-decoration: underline; }
+.convo .in-dialog { display: block; font-size: 11px; color: var(--ink-3); font-style: italic; }
+.convo[aria-current="true"] .in-dialog { color: inherit; opacity: .75; }
 
 .convo {
   display: block; width: 100%; text-align: left;
