@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>BigBooks AI Assistant</title>
+  <meta name="description" content="A static sample chat client for the BigBooks AI conversation API: streaming answers, model thinking, markdown, and conversation history.">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#128172;</text></svg>">
+</head>
+<body>
+
+<!-- Sign-in gate. Shown until a token is in sessionStorage; hidden for #demo. -->
+<div id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <div class="gate-mark" aria-hidden="true">&#128172;</div>
+    <h1>BigBooks AI Assistant</h1>
+    <p id="gate-message" class="muted">
+      Ask questions about your own books. Sign in with BigBooks to link an account and start a conversation.
+    </p>
+    <button id="signin-btn" class="primary">Sign in with BigBooks</button>
+    <p class="gate-alt">
+      No account? <a href="#demo">Preview the interface in demo mode</a> &mdash; synthetic data, nothing saved.
+    </p>
+    <p id="gate-config" class="warn" hidden>
+      <strong>No client id configured.</strong> Register a public client at
+      <a href="https://www.bigbooks.app/clients" target="_blank" rel="noopener">bigbooks.app/clients</a>
+      and set <code>CLIENT_ID</code> in <code>public/config.js</code>.
+    </p>
+  </div>
+</div>
+
+<div id="app" class="app" hidden>
+
+  <!-- Conversation history. A permanent column on desktop; a slide-over drawer on narrow screens. -->
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-head">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">&#128172;</span> BigBooks</div>
+      <button id="close-drawer" class="icon-btn drawer-only" aria-label="Close conversations">&#10005;</button>
+    </div>
+
+    <button id="new-chat" class="new-chat">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
+      New chat
+    </button>
+
+    <div class="history-head">Conversations</div>
+    <nav id="history" class="history" aria-label="Conversation history">
+      <p class="history-empty muted">No conversations yet.</p>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button id="link-btn" class="ghost" data-label="Link an account">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M9 11.5l-1 1a2.5 2.5 0 01-3.5-3.5l1-1"/></svg>
+        Link an account
+      </button>
+      <div class="who">
+        <span id="who-name" class="muted"></span>
+        <button id="signout" class="link-btn">Sign out</button>
+      </div>
+    </div>
+  </aside>
+
+  <div id="scrim" class="scrim" hidden></div>
+
+  <main class="chat">
+    <header class="chat-head">
+      <button id="open-drawer" class="icon-btn drawer-only" aria-label="Show conversations">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+      </button>
+      <h1 id="chat-title">New chat</h1>
+      <label class="mode" title="AGENTIC routes the question through the workflow patterns (routing, parallelization, orchestrator-workers) instead of a single tool-calling turn.">
+        <input type="checkbox" id="agentic"> <span>Agentic</span>
+      </label>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <div id="stream" class="stream">
+      <section id="empty" class="empty">
+        <h2>What would you like to know?</h2>
+        <p class="muted">The assistant answers from your own accounts, transactions, budgets, and holdings.</p>
+        <div id="suggestions" class="suggestions"></div>
+        <button id="reshuffle" class="link-btn">Show different questions</button>
+      </section>
+      <div id="messages" class="messages" aria-live="polite"></div>
+    </div>
+
+    <footer class="composer">
+      <form id="composer-form" autocomplete="off">
+        <textarea id="input" rows="1" placeholder="Ask about your finances&hellip;" maxlength="16384"></textarea>
+        <button id="send" type="submit" class="primary send" aria-label="Send">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14L14 8 2 2l2.5 6L2 14z"/></svg>
+        </button>
+        <button id="stop" type="button" class="stop" hidden aria-label="Stop generating">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="4.5" width="7" height="7" rx="1"/></svg>
+        </button>
+      </form>
+      <p class="composer-hint muted">
+        Enter sends, Shift+Enter adds a line. Model calls spend
+        <a href="https://www.bigbooks.app/secrets" target="_blank" rel="noopener">your own provider key</a>.
+      </p>
+    </footer>
+  </main>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
