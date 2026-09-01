@@ -281,3 +281,7 @@ tenancy, concurrency, errors, and pagination conventions across every endpoint, 
   static-app pattern over balance sheets, accounts, and Plaid Link
 - [envelope-budgeting-sample](https://github.com/BigBooksApp/envelope-budgeting-sample) —
   zero-based / envelope budgeting over `/v1/budgeting/*`
+
+## Questions
+
+Ask in the [BigBooks Developers Discord](https://discord.gg/DTwq2Ukuty).
