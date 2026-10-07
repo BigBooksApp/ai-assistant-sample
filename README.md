@@ -65,8 +65,7 @@ The API takes no `apiKey` on the wire; provider selection comes from the stored-
 Linking an account calls Plaid with **a client id and secret you stored yourself**. Add them at
 **<https://www.bigbooks.app/data-secrets>**; you get both from the
 [Plaid dashboard](https://dashboard.plaid.com/developers/keys). Without them the first call of
-the link flow fails with `500 internal_error` and the message *"Plaid secret could not be
-resolved"*.
+the link flow fails with `400` and the error code `missing_credentials`.
 
 The API does accept `X-Plaid-Client-ID` and `X-Plaid-Secret` headers as a fallback for
 server-side callers, but stored credentials take precedence over them and a browser app must
@@ -92,7 +91,10 @@ Browser (this static app)
   └► POST /v1/plaid/public/token → Plaid Link → POST /v1/plaid/access/token
 ```
 
-Every call sends `X-Acting-Party-ID: <your party id>`. The access token lives only in
+The list, the first turn and the linked-banks check send `X-Acting-Party-ID: <your party id>`.
+Calls that address one conversation (reading it, later turns, stop) take no such header: the
+conversation carries its party. Neither do the two Plaid token calls: the exchange names the
+party in its body, and BigBooks sets each item's webhook to its own receiver. The access token lives only in
 `sessionStorage` for the current tab.
 
 ### The event stream

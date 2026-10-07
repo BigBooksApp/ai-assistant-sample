@@ -238,7 +238,8 @@ function clearSearch() {
 async function openConversation(id) {
   closeDrawer();
   if (state.streaming) return;
-  const convo = state.demo ? demoConversation(id) : await apiGet(conversationPath(id), { party: state.party });
+  // Item-level: tenancy comes from the conversation itself, so no X-Acting-Party-ID.
+  const convo = state.demo ? demoConversation(id) : await apiGet(conversationPath(id));
   adoptConversation(convo);
   renderHistory();
   renderMessages();
@@ -359,8 +360,9 @@ async function streamTurn(prompt, turn, allowRetry) {
     method: continuing ? 'PUT' : 'POST',
     signal: controller.signal,
     headers: authHeaders(Object.assign(
-      { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-Acting-Party-ID': state.party },
-      continuing ? { 'If-Match': String(state.current.version) } : {},
+      { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      // Starting names the acting party; a later turn addresses the conversation, which carries it.
+      continuing ? { 'If-Match': String(state.current.version) } : { 'X-Acting-Party-ID': state.party },
     )),
     body: JSON.stringify(continuing
       ? { text: prompt, chatType: state.chatType }
@@ -375,7 +377,7 @@ async function streamTurn(prompt, turn, allowRetry) {
     // turn once; a second conflict is a real problem, not a race. Only the version is
     // adopted — re-reading the messages here would swap out the `turn` object the caller
     // is still painting into.
-    const convo = await apiGet(conversationPath(state.current.id), { party: state.party });
+    const convo = await apiGet(conversationPath(state.current.id));
     state.current.version = convo.version;
     turn.text = '';
     turn.thinking = '';
@@ -407,7 +409,7 @@ function failureFromBody(status, text) {
 
 /** Re-reads the current conversation, waiting out a turn that has not finished persisting. */
 async function refreshCurrent(attempt = 0) {
-  const convo = await apiGet(conversationPath(state.current.id), { party: state.party });
+  const convo = await apiGet(conversationPath(state.current.id));
   // COMPLETED is written atomically with the answer, so GENERATING here means the reply
   // has not landed yet and the messages we would adopt are one short.
   if (convo.turnState === 'GENERATING' && attempt < 4) {
@@ -430,7 +432,7 @@ async function stopTurn() {
   // Tell the server first — it keeps whatever partial answer exists and marks the turn
   // STOPPED. Dropping the socket alone would leave the turn generating server-side.
   if (state.current && state.current.id && !state.demo) {
-    await apiPost(conversationPath(state.current.id) + '/stop', { party: state.party }).catch(() => {});
+    await apiPost(conversationPath(state.current.id) + '/stop').catch(() => {});
   }
   if (state.abort) state.abort.abort();
 }
@@ -638,8 +640,9 @@ async function openPlaidLink() {
   hideBanner();
   setLinkBusy(true);
   try {
+    // Neither Plaid token call takes X-Acting-Party-ID; the exchange names the party in its body,
+    // and there is no webhook to send: BigBooks sets each item's webhook to its own receiver.
     const { token } = await apiPost('/v1/plaid/public/token', {
-      party: state.party,
       body: { clientName: 'BigBooks AI Assistant', language: 'en', countryCodes: ['US'], clientUserId: state.party },
     });
     window.Plaid.create({
@@ -671,16 +674,11 @@ async function openPlaidLink() {
 function exchangePublicToken(publicToken, metadata) {
   const inst = metadata.institution || {};
   return apiPost('/v1/plaid/access/token', {
-    party: state.party,
     body: {
       publicToken,
       party: state.party,
       linkSessionId: metadata.link_session_id,
-      // The webhook is the API's own endpoint, matching what the server registered when it
-      // minted the link token. It follows the API host; it is not a value you choose.
-      webhook: CONFIG.API + '/v1/plaid/webhook',
       institution: inst.institution_id ? { id: inst.institution_id, name: inst.name } : null,
-      accounts: (metadata.accounts || []).map((a) => ({ id: a.id, name: a.name, mask: a.mask, type: a.type, subtype: a.subtype })),
     },
   });
 }
